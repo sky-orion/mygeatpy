@@ -33,6 +33,7 @@ def crtfld(Encoding, problem_varTypes, problem_ranges, problem_borders):
         field = np.stack([lb, ub, varTypes], axis=0)
         return field
 
+
 class Mutinv(Mutation):
     """
     Mutinv - class : 一个用于调用内核中的变异函数mutinv(染色体片段逆转变异)的变异算子类，
@@ -51,31 +52,30 @@ class Mutinv(Mutation):
 
     def mymutinv(self, Encoding, OldChrom, FieldDR, Pm=1, InvertLen=None, Parallel=None):
         if len(OldChrom.shape) == 1:
-            OldChrom=OldChrom.reshape((1,-1))
+            OldChrom = OldChrom.reshape((1, -1))
         num, lens = OldChrom.shape
         if Pm is None:
             Pm = 1
         if InvertLen is None:
-            InvertLen = lens//2
-        if InvertLen >lens:
-            InvertLen=lens
+            InvertLen = lens // 2
+        if InvertLen > lens:
+            InvertLen = lens
         re = []
         for chrom in range(num):
             prob = random.random()
             if (prob <= Pm):
-                point = random.randint(0, lens-InvertLen)
+                point = random.randint(0, lens - InvertLen)
                 tmpchrom = OldChrom[chrom]
                 newchrom = copy.deepcopy(tmpchrom)
                 # print(point,InvertLen)
-                if InvertLen==lens:
-                    newchrom=tmpchrom[::-1]
+                if InvertLen == lens:
+                    newchrom = tmpchrom[::-1]
                 else:
-                    newchrom[point:point + InvertLen]=tmpchrom[point + InvertLen-1:point-1:-1]
+                    newchrom[point:point + InvertLen] = tmpchrom[point + InvertLen - 1:point - 1:-1]
                 re.append(newchrom)
             else:
                 re.append(OldChrom[chrom])
         return np.array(re)
-
 
     def getHelp(self):  # 查看内核中的变异算子的API文档
         help(mutinv)
@@ -363,7 +363,116 @@ class Xovpmx(Recombination):
         child2 = a2_2 + fragment1 + a2_3
         # print('修正后的子代为:\n{}\n{}'.format(child1, child2))
         return np.array(child1), np.array(child2)
-    
+
+
+class Recsbx(Recombination):
+    """
+    Recsbx - class : 一个用于调用内核中的函数recsbx(模拟二进制交叉)的类，
+                     该类的各成员属性与内核中的对应函数的同名参数含义一致，
+                     可利用help(recsbx)查看各参数的详细含义及用法。
+    """
+
+    def __init__(self, XOVR=0.7, Half_N=False, n=20, Parallel=False):
+        self.XOVR = XOVR  # 发生交叉的概率
+        self.Half_N = Half_N  # 该参数是旧版的输入参数Half的升级版，用于控制交配方式
+        self.n = n  # 分布指数，必须不小于0
+        self.Parallel = Parallel  # 表示是否采用并行计算，缺省时默认为False
+
+    def do(self, OldChrom):  # 执行内核函数
+        return self.myrecsbx(OldChrom, self.XOVR, self.Half_N, self.n, self.Parallel)
+
+    def myrecsbx(self, OldChrom, XOVR=0.7, Half_N=False, n=20, Parallel=None):
+        if Half_N is False:  # Half_N = False时返回的NewChrom的行数与OldChrom一致,当Half_N为False时配对的两条染色体相互交叉返回两条染色体。
+            if (type(OldChrom) is list):
+                for chrom in OldChrom:
+                    num, len = chrom.shape
+                    for i in range(num // 2):
+                        prob = random.random()
+                        if (prob <= XOVR):
+                            chrom[i], chrom[i + num // 2] = self.sbx(chrom[i], chrom[i + num // 2])
+                return OldChrom
+            else:
+                chrom = OldChrom
+                num, len = chrom.shape
+                for i in range(num // 2):
+                    prob = random.random()
+                    # print(prob)
+                    if (prob <= XOVR):
+                        chrom[i], chrom[i + num // 2] = self.sbx(chrom[i], chrom[i + num // 2])
+                return OldChrom
+        elif Half_N is True:
+            if (type(OldChrom) is list):
+                newchrom = []
+                for chrom in OldChrom:
+                    num, len = chrom.shape
+                    for i in range(num // 2):
+                        prob = random.random()
+                        if (prob <= XOVR):
+                            chrom[i], _ = self.sbx(chrom[i], chrom[i + num // 2], n)
+                    newchrom.append(chrom[:(num // 2)])
+                return newchrom
+            else:
+                chrom = OldChrom
+                num, len = chrom.shape
+                for i in range(num // 2):
+                    prob = random.random()
+                    if (prob <= XOVR):
+                        chrom[i], _ = self.sbx(chrom[i], chrom[i + num // 2], n)
+                return OldChrom[:(num // 2)]
+        else:
+            if (type(OldChrom) is list):
+                returnchroms = []
+                for chrom in OldChrom:
+                    num, len = chrom.shape
+                    newchroms = []
+                    for i in range(min(Half_N, num)):
+                        point1 = random.randint(0, num - 1)
+                        point2 = random.randint(0, num - 1)
+                        while point1 != point2:
+                            point1 = random.randint(0, num - 1)
+                            point2 = random.randint(0, num - 1)
+                        nextchrom, _ = self.sbx(chrom[point1], chrom[point2], n)
+                        newchroms.append(nextchrom)
+                    newchroms = np.array(newchroms)
+                    returnchroms.append(newchroms)
+                return returnchroms
+            else:
+                chrom = OldChrom
+                num, len = chrom.shape
+                newchroms = []
+                for i in range(min(Half_N, num)):
+                    point1 = random.randint(0, num - 1)
+                    point2 = random.randint(0, num - 1)
+                    while point1 != point2:
+                        point1 = random.randint(0, num - 1)
+                        point2 = random.randint(0, num - 1)
+                    nextchrom, _ = self.sbx(chrom[point1], chrom[point2], n)
+                    newchroms.append(nextchrom)
+                newchroms = np.array(newchroms)
+                return newchroms
+        pass
+
+    def sbx(self, chroma, chromb, n=20):
+        # print(chroma.shape)
+        if len(chroma.shape)>1:
+            chroma=chroma.reshape(-1)
+            chromb = chromb.reshape(-1)
+        lens = chroma.shape[0]
+        for k in range(lens):
+            r = random.random()
+            if (r <= 0.5):
+                beta = np.power(2 * r, 1 / (n + 1))
+            else:
+                beta = np.power(1/(2-2*r),-1 / (n + 1))
+            chroma[k] = 0.5 * ((1 + beta) * chroma[k] + (1 - beta) * chromb[k])
+            chromb[k] = 0.5 * ((1 - beta) * chroma[k] + (1 + beta) * chromb[k])
+
+        return   chroma,chromb
+
+    def getHelp(self):  # 查看内核中的重组算子的API文档
+        help(geatpy.recsbx)
+
+
 if __name__ == '__main__':
     # 测试、
     x = np.array([9, 8, 7, 6, 5, 4, 3, 2, 1, 0])
@@ -413,6 +522,18 @@ if __name__ == '__main__':
     newchrom = test3.mymutinv("P", chrom1, FieldDR=None, Pm=1, InvertLen=10)
     print(chrom1)
     print(newchrom)
+    zeros = np.zeros(chrom2.shape)
+    # print(zeros)
+    test = Recsbx()
+    one = np.random.random((2, 4))
+    one1 =copy.deepcopy(one)
+    print(one,"\n")
+    newtone=test.myrecsbx(one,XOVR=1)
+    # chrom = np.random.random((4, 4))
+    origin=geatpy.Recsbx(Half_N = False,XOVR=1)
+
+    print(newtone,"\n")
+    print(origin.do(one1))
     # name = 'MyProblem'  # 初始化name（函数名称，可以随意设置）
     # M = 1  # 初始化M（目标维数）
     # maxormins = [-1]  # 初始化maxormins（目标最小最大化标记列表，1：最小化该目标；-1：最大化该目标）
@@ -428,5 +549,3 @@ if __name__ == '__main__':
     # print(Field)
     # print(geatpy.bs2real(one,Field))
     help(geatpy.recsbx)
-
-
