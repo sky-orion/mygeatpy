@@ -71,7 +71,12 @@ class Mutinv(Mutation):
                 if InvertLen == lens:
                     newchrom = tmpchrom[::-1]
                 else:
-                    newchrom[point:point + InvertLen] = tmpchrom[point + InvertLen - 1:point - 1:-1]
+                    # print(tmpchrom,point,InvertLen)
+                    # point=0
+                    if point==0:
+                        newchrom[point:point + InvertLen] = tmpchrom[point + InvertLen - 1::-1]
+                    else:
+                        newchrom[point:point + InvertLen] = tmpchrom[point + InvertLen - 1:point - 1:-1]
                 re.append(newchrom)
             else:
                 re.append(OldChrom[chrom])
@@ -504,8 +509,8 @@ if __name__ == '__main__':
     testmut = Mutbin()
     newchrom = testmut.mymutbin("BG", one, Pm=1)
     newchrom1 = testmut.mymutbin("BG", zero, Pm=1)
-    print(newchrom)
-    print(newchrom1)
+    # print(newchrom)
+    # print(newchrom1)
     test2 = Xovpmx()
 
     chrom = np.arange(1, 10)
@@ -515,11 +520,11 @@ if __name__ == '__main__':
     # print(chroms)
     # print(newchrom)
     random.seed(10)
-    chrom = np.arange(1, 32)
+    chrom = np.arange(0, 10)
     chrom1 = np.random.permutation(chrom)
     chrom2 = np.random.permutation(chrom)
     test3 = Mutinv()
-    newchrom = test3.mymutinv("P", chrom1, FieldDR=None, Pm=1, InvertLen=10)
+    newchrom = test3.mymutinv("P", chrom1, FieldDR=None, Pm=1, InvertLen=5)
     print(chrom1)
     print(newchrom)
     zeros = np.zeros(chrom2.shape)
@@ -527,13 +532,13 @@ if __name__ == '__main__':
     test = Recsbx()
     one = np.random.random((2, 4))
     one1 =copy.deepcopy(one)
-    print(one,"\n")
+    # print(one,"\n")
     newtone=test.myrecsbx(one,XOVR=1)
     # chrom = np.random.random((4, 4))
     origin=geatpy.Recsbx(Half_N = False,XOVR=1)
 
-    print(newtone,"\n")
-    print(origin.do(one1))
+    # print(newtone,"\n")
+    # print(origin.do(one1))
     # name = 'MyProblem'  # 初始化name（函数名称，可以随意设置）
     # M = 1  # 初始化M（目标维数）
     # maxormins = [-1]  # 初始化maxormins（目标最小最大化标记列表，1：最小化该目标；-1：最大化该目标）
@@ -548,4 +553,4 @@ if __name__ == '__main__':
     # Field = crtfld(Encoding, np.array(varTypes),np.stack([lb, ub], axis=0) , np.stack([lbin, ubin], axis=0))
     # print(Field)
     # print(geatpy.bs2real(one,Field))
-    help(geatpy.recsbx)
+    # help(geatpy.recsbx)

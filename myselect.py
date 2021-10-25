@@ -46,9 +46,7 @@ def roulette(select_list):
             continue
 def tour(select_list,tourn):
     len=select_list.shape[0]
-    i=0
     choice=np.random.choice(len, tourn, replace=False)
-    # print(choice)
     choose=select_list[choice]
     choosed=np.argmax(choose)
     return choice[choosed]
@@ -89,7 +87,7 @@ def select(SEL_F,FitnV_N, NSel=None, params2=None, Parallel=False):
         else:
             select_list=FitnV_N
 
-        tourn = select_list.shape[0]//2  # 锦标赛参数
+        tourn = 2   # 锦标赛参数
 
         if NSel is not None :
             if NSel<1:#选nsel*100%个个体
@@ -161,20 +159,32 @@ def select(SEL_F,FitnV_N, NSel=None, params2=None, Parallel=False):
         else:
             tmptake = susselect(select_list, select_list.shape[0])
             return np.array(tmptake)
+    if SEL_F == "dup":
+        select_list=np.argsort(-FitnV_N.reshape(-1))
+        if NSel<select_list.shape[0]:
+            return select_list[:NSel]
+        else:
+            return  select_list
+
+
+
 if __name__ == '__main__':
-    N=10
-    FitnV_N = np.array([i for i in range(N)]).reshape(-1,1)
+    N=5
+    FitnV_N = np.array([i for i in range(10)]).reshape(-1,1)
     print(FitnV_N.shape[0])
 
     take=select("rws",FitnV_N,N)
-    print("rws",take,geatpy.selecting('rws', FitnV_N))
+    print("rws",take,geatpy.selecting('rws', FitnV_N,N))
     take=select("tour",FitnV_N,N)
-    print("tour",take,geatpy.selecting('tour', FitnV_N))
+    print("tour",take,geatpy.selecting('tour', FitnV_N,N))
     take=select("ecs",FitnV_N,N)
-    print("ecs",take,geatpy.selecting('ecs', FitnV_N))
+    print("ecs",take,geatpy.selecting('ecs', FitnV_N,N))
     take=select("sus",FitnV_N,N)
-    print("sus",take,geatpy.selecting('sus', FitnV_N))
+    print("sus",take,geatpy.selecting('sus', FitnV_N,N))
+    take=select("dup",FitnV_N,N)
+    print("dup",take,geatpy.selecting('dup', FitnV_N,N))
     choice = np.random.choice(10, 10, replace=False)
     Elicts = [1] * 3+[2]*2
     # print(Elicts)
+    help(geatpy.dup)
     # print(choice)
