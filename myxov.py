@@ -7,7 +7,8 @@ from geatpy.operators.mutation.Mutation import *
 from geatpy.core import mutbga
 import geatpy
 import random
-
+import warnings
+warnings.filterwarnings("ignore")
 
 def crtfld(Encoding, problem_varTypes, problem_ranges, problem_borders):
     assert Encoding == 'BG' or Encoding == 'RI' or Encoding == 'P', "编码必须为BG、RI、P"
@@ -229,6 +230,99 @@ class Xovdp(Recombination):
     def getHelp(self):  # 查看内核中的重组算子的API文档
         help(xovdp)
 
+class Xovud(Recombination):
+    """
+    Xovdp - class : 一个用于调用内核中的函数xovdp(两点交叉)的类，
+                    该类的各成员属性与内核中的对应函数的同名参数含义一致，
+                    可利用help(xovdp)查看各参数的详细含义及用法。
+
+    """
+
+    def __init__(self, XOVR=0.7, Half_N=False, GeneID=None, Parallel=False):
+        self.XOVR = XOVR  # 发生交叉的概率
+        self.Half_N = Half_N  # 该参数是旧版的输入参数Half的升级版，用于控制交配方式
+        self.GeneID = GeneID  # 基因ID，是一个行向量，若设置了该参数，则该函数会对具有相同基因ID的染色体片段进行整体交叉
+        self.Parallel = Parallel  # 表示是否采用并行计算，缺省或为None时默认为False
+
+    def do(self, OldChrom):  # 执行内核函数
+
+        return self.myxovud(OldChrom, self.XOVR, self.Half_N, self.GeneID, self.Parallel)
+
+    def myxovud(self, OldChrom, XOVR=0.7, Half_N=False, GeneID=None, Parallel=None):  # self总是指调用时的类的实例。
+        if Half_N is False:  # Half_N = False时返回的NewChrom的行数与OldChrom一致,当Half_N为False时配对的两条染色体相互交叉返回两条染色体。
+            if (type(OldChrom) is list):
+                for chrom in OldChrom:
+                    num, len = chrom.shape
+                    for i in range(num // 2):
+                            chrom[i], chrom[i + num // 2] = self.two_points_cross(chrom[i], chrom[i + num // 2],XOVR)
+                return OldChrom
+            else:
+                chrom = OldChrom
+                print(chrom.shape)
+                num, len = chrom.shape
+                for i in range(num // 2):
+                    chrom[i], chrom[i + num // 2] = self.two_points_cross(chrom[i], chrom[i + num // 2],XOVR)
+                return OldChrom
+        elif Half_N is True:
+            if (type(OldChrom) is list):
+                newchrom = []
+                for chrom in OldChrom:
+                    num, len = chrom.shape
+                    for i in range(num // 2):
+                        chrom[i], _ = self.two_points_cross(chrom[i], chrom[i + num // 2],XOVR)
+                    newchrom.append(chrom[:(num // 2)])
+                return newchrom
+            else:
+                chrom = OldChrom
+                num, len = chrom.shape
+                for i in range(num // 2):
+                    chrom[i], _ = self.two_points_cross(chrom[i], chrom[i + num // 2],XOVR)
+                return OldChrom[:(num // 2)]
+        else:
+            if (type(OldChrom) is list):
+                returnchroms = []
+                for chrom in OldChrom:
+                    num, len = chrom.shape
+                    newchroms = []
+                    for i in range(min(Half_N, num)):
+                        point1 = random.randint(0, num - 1)
+                        point2 = random.randint(0, num - 1)
+                        while point1 != point2:
+                            point1 = random.randint(0, num - 1)
+                            point2 = random.randint(0, num - 1)
+                        nextchrom, _ = self.two_points_cross(chrom[point1], chrom[point2],XOVR)
+                        newchroms.append(nextchrom)
+                    newchroms = np.array(newchroms)
+                    returnchroms.append(newchroms)
+                return returnchroms
+            else:
+                chrom = OldChrom
+                num, len = chrom.shape
+                newchroms = []
+                for i in range(min(Half_N, num)):
+                    point1 = random.randint(0, num - 1)
+                    point2 = random.randint(0, num - 1)
+                    while point1 != point2:
+                        point1 = random.randint(0, num - 1)
+                        point2 = random.randint(0, num - 1)
+                    nextchrom, _ = self.two_points_cross(chrom[point1], chrom[point2],XOVR)
+                    newchroms.append(nextchrom)
+                newchroms = np.array(newchroms)
+                return newchroms
+
+    def two_points_cross(self, a1, a2,XOVR=0.5):
+        # print(a1.shape[0])
+        for i in range(a1.shape[0]):
+            prob = random.random()
+            # print(prob,i,XOVR)
+            if prob <= XOVR:
+                tmp=(a2[i])
+                a2[i]=a1[i]
+                a1[i]=tmp
+        return a1,a2
+
+    def getHelp(self):  # 查看内核中的重组算子的API文档
+        help(xovdp)
 
 class Xovpmx(Recombination):
     """
@@ -531,13 +625,22 @@ if __name__ == '__main__':
     # print(zeros)
     test = Recsbx()
     one = np.random.random((2, 4))
+    print(chrom<5)
+    print("zuixiao",sum(np.reshape(chrom<5,(-1))))
     one1 =copy.deepcopy(one)
     # print(one,"\n")
     newtone=test.myrecsbx(one,XOVR=1)
     # chrom = np.random.random((4, 4))
-    origin=geatpy.Recsbx(Half_N = False,XOVR=1)
+    origin=geatpy.Recsbx(Half_N = False,XOVR=0.5)
+    test = Xovud()
+    one = np.ones((5, 5))
+    zero = np.zeros((5, 5))
 
-    # print(newtone,"\n")
+    chrom=np.vstack((one,zero))#垂直拼接
+    print(chrom)
+    newchrom=test.myxovud(chrom,XOVR=0.5)
+    test2=geatpy.Xovud(XOVR=1)
+    print(newchrom,"\n",test2.do(np.vstack((one,zero))))
     # print(origin.do(one1))
     # name = 'MyProblem'  # 初始化name（函数名称，可以随意设置）
     # M = 1  # 初始化M（目标维数）
@@ -553,4 +656,4 @@ if __name__ == '__main__':
     # Field = crtfld(Encoding, np.array(varTypes),np.stack([lb, ub], axis=0) , np.stack([lbin, ubin], axis=0))
     # print(Field)
     # print(geatpy.bs2real(one,Field))
-    # help(geatpy.recsbx)
+    # help(geatpy.xovud)
