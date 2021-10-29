@@ -8,31 +8,198 @@ from geatpy.core import mutbga
 import geatpy
 import random
 import warnings
+
 warnings.filterwarnings("ignore")
 
-def crtfld(Encoding, problem_varTypes, problem_ranges, problem_borders):
+
+def crtfld(Encoding, problem_varTypes, problem_ranges, problem_borders, precisions=None, codes=0):
     assert Encoding == 'BG' or Encoding == 'RI' or Encoding == 'P', "编码必须为BG、RI、P"
     assert problem_varTypes.shape[0] == problem_ranges.shape[1] and problem_ranges.shape[1] == problem_borders.shape[
         1], "输入维度不一致"
     assert problem_ranges.shape[0] == 2 and problem_borders.shape[0] == 2, "range的维度必须为2*N"
+
     dim = problem_varTypes.shape[0]
+    if precisions is None:
+        precisions = [4.0] * dim
     if Encoding == 'BG':
         lens = [31] * dim  # 长度
         lb = problem_ranges[0]
         ub = problem_ranges[1]
-        codes = [0] * dim  # 编码方式
+        code = [codes] * dim  # 编码方式
         scales = [0] * dim
         lbin = problem_borders[0]
         ubin = problem_borders[1]
         varTypes = problem_varTypes
-        field = np.stack([lens, lb, ub, codes, scales, lbin, ubin, varTypes], axis=0)
+        field = np.stack([lens, lb, ub, code, scales, lbin, ubin, varTypes], axis=0)
         return field
-    if Encoding == 'RI' or Encoding == 'P':
+    if Encoding == 'P':
         lb = problem_ranges[0]
         ub = problem_ranges[1]
-        varTypes = problem_varTypes
+        varTypes = [1] * dim
+        lbin = problem_borders[0]
+        ubin = problem_borders[1]
+        for i in range(dim):
+            if lbin[i] == 0:
+                lb[i] = lb[i] + 1
+            if ubin[i] == 0:
+                ub[i] = ub[i] - 1
+            assert lb[i] <= ub[i], "上界必须小于下界"
         field = np.stack([lb, ub, varTypes], axis=0)
         return field
+    if Encoding == "RI":
+        problem_ranges = problem_ranges.astype(np.float)
+        lb = problem_ranges[0]
+        ub = problem_ranges[1]
+        lbin = problem_borders[0]
+        ubin = problem_borders[1]
+        for i in range(dim):
+            if problem_varTypes[i] == 0:
+
+                if lbin[i] == 0:
+                    lb[i] = lb[i] + np.power(10, -1 * precisions[i])
+                if ubin[i] == 0:
+                    ub[i] = ub[i] - np.power(10, -1 * precisions[i])
+                assert lb[i] <= ub[i], "上界必须小于下界"
+            elif problem_varTypes[i] == 1:
+                if lbin[i] == 0:
+                    lb[i] = lb[i] + 1
+                if ubin[i] == 0:
+                    ub[i] = ub[i] - 1
+                assert lb[i] <= ub[i], "上界必须小于下界"
+        varTypes = problem_varTypes
+
+        field = np.stack([lb, ub, varTypes], axis=0)
+        return field
+
+
+class Mutpolyn(Mutation):
+    """
+    Mutpolyn - class : 一个用于调用内核中的变异函数mutpolyn(多项式变异)的变异算子类，
+                       该类的各成员属性与内核中的对应函数的同名参数含义一致，
+                       可利用help(mutpolyn)查看各参数的详细含义及用法。
+    """
+
+    def __init__(self, Pm=None, DisI=20, FixType=1, Parallel=False):
+        self.Pm = Pm  # 表示染色体上变异算子所发生作用的最小片段发生变异的概率
+        self.DisI = DisI  # 多项式变异中的分布指数
+        self.FixType = FixType  # 表示采用哪种方式来修复超出边界的染色体元素，可取值1，2，3，4，详细含义见help()帮助文档
+        self.Parallel = Parallel  # 表示是否采用并行计算，缺省时默认为False
+
+    def do(self, Encoding, OldChrom, FieldDR, *args):  # 执行变异
+        return self.mymutpolyn(Encoding, OldChrom, FieldDR, self.Pm, self.DisI, self.FixType, self.Parallel)
+
+    def mymutpolyn(self, Encoding, OldChrom, FieldDR, Pm=None, DisI=20, FixType=1, Parallel=None):
+        assert Encoding == "RI", "该函数只针对实整数值编码的种群进行变异，因此只允许Encoding为'RI'。"
+        num, len = OldChrom.shape
+        if Pm is None:
+            Pm = 1 / len
+        if DisI is None:
+            DisI = 20
+        for chrom in range(num):
+            if (type(Pm) is float):
+                for i in range(len):
+                    prob = random.random()
+                    if (prob <= Pm):
+                        u = np.random.rand()
+                        if u < 0.5:
+                            beta = np.power(2 * u, 1 / (DisI + 1)) - 1
+                        else:
+                            beta = 1 - np.power(2 - 2 * u, 1 / (DisI + 1))
+                        print(beta)
+                        if FieldDR[2, i] == 1:
+
+                            OldChrom[chrom, i] = round(OldChrom[chrom, i] + beta)
+                        else:
+                            OldChrom[chrom, i] = OldChrom[chrom, i] + beta
+
+                        if (OldChrom[chrom, i] < FieldDR[0, i]) or (OldChrom[chrom, i] > FieldDR[1, i]):
+                            OldChrom[chrom, i] = self.fix(OldChrom[chrom, i], FieldDR, FixType, i)
+            else:
+                for i in range(len):
+                    prob = random.random()
+                    if (prob <= Pm[i]):
+                        u = random.random()
+                        if u < 0.5:
+                            beta = np.power(2 * u, 1 / (DisI + 1)) - 1
+                        else:
+                            beta = 1 - np.power(2 - 2 * u, 1 / (DisI + 1))
+                        if FieldDR[2, i] == 1:
+                            OldChrom[chrom, i] = round(OldChrom[chrom, i] + beta)
+                        else:
+                            OldChrom[chrom, i] = OldChrom[chrom, i] + beta
+                        if (OldChrom[chrom, i] < FieldDR[0, i]) or (OldChrom[chrom, i] > FieldDR[1, i]):
+                            OldChrom[chrom, i] = self.fix(OldChrom[chrom, i], FieldDR, FixType, i)
+            # print(FieldDR,OldChrom)
+            return OldChrom
+
+    def fix(self, chrom, fleid, fixtype, point):
+        lower = fleid[0, point]
+        upper = fleid[1, point]
+        vartype = fleid[2, point]
+        # print(vartype)
+        if vartype == 0:
+            if chrom < lower:
+                if fixtype == 1:
+                    chrom = lower
+                if fixtype == 2:
+                    chrom = upper + chrom - lower
+                    if chrom < lower or chrom > upper:
+                        chrom = self.fix(chrom, fleid, 4, point)
+                if fixtype == 3:
+                    chrom = 2 * lower - chrom
+                    if chrom < lower or chrom > upper:
+                        chrom = self.fix(chrom, fleid, 4, point)
+                if fixtype == 4:
+                    r = random.random()
+                    chrom = lower + (upper - lower) * r
+            elif chrom > upper:
+                if fixtype == 1:
+                    chrom = upper
+                if fixtype == 2:
+                    chrom = lower + chrom - upper
+                    if chrom < lower or chrom > upper:
+                        chrom = self.fix(chrom, fleid, 4, point)
+                if fixtype == 3:
+                    chrom = 2 * upper - chrom
+                    if chrom < lower or chrom > upper:
+                        chrom = self.fix(chrom, fleid, 4, point)
+                if fixtype == 4:
+                    r = random.random()
+                    chrom = lower + (upper - lower) * r
+        else:
+            if chrom < lower:
+                if fixtype == 1:
+                    chrom = lower
+                if fixtype == 2:
+                    chrom = upper + chrom - lower
+                    if chrom < lower or chrom > upper:
+                        chrom = self.fix(chrom, fleid, 4, point)
+                if fixtype == 3:
+                    chrom = 2 * lower - chrom
+                    if chrom < lower or chrom > upper:
+                        chrom = self.fix(chrom, fleid, 4, point)
+                if fixtype == 4:
+                    r = np.random.randint(lower, high=upper)
+                    chrom = r
+            elif chrom > upper:
+                if fixtype == 1:
+                    chrom = upper
+                if fixtype == 2:
+                    chrom = lower + chrom - upper
+                    if chrom < lower or chrom > upper:
+                        chrom = self.fix(chrom, fleid, 4, point)
+                if fixtype == 3:
+                    chrom = 2 * upper - chrom
+                    if chrom < lower or chrom > upper:
+                        chrom = self.fix(chrom, fleid, 4, point)
+                if fixtype == 4:
+                    r = np.random.randint(lower, high=upper)
+                    chrom = lower + (upper - lower) * r
+        print(chrom)
+        return chrom
+
+    def getHelp(self):  # 查看内核中的变异算子的API文档
+        help(geatpy.mutpolyn)
 
 
 class Mutinv(Mutation):
@@ -74,7 +241,7 @@ class Mutinv(Mutation):
                 else:
                     # print(tmpchrom,point,InvertLen)
                     # point=0
-                    if point==0:
+                    if point == 0:
                         newchrom[point:point + InvertLen] = tmpchrom[point + InvertLen - 1::-1]
                     else:
                         newchrom[point:point + InvertLen] = tmpchrom[point + InvertLen - 1:point - 1:-1]
@@ -230,6 +397,7 @@ class Xovdp(Recombination):
     def getHelp(self):  # 查看内核中的重组算子的API文档
         help(xovdp)
 
+
 class Xovud(Recombination):
     """
     Xovdp - class : 一个用于调用内核中的函数xovdp(两点交叉)的类，
@@ -254,14 +422,14 @@ class Xovud(Recombination):
                 for chrom in OldChrom:
                     num, len = chrom.shape
                     for i in range(num // 2):
-                            chrom[i], chrom[i + num // 2] = self.two_points_cross(chrom[i], chrom[i + num // 2],XOVR)
+                        chrom[i], chrom[i + num // 2] = self.two_points_cross(chrom[i], chrom[i + num // 2], XOVR)
                 return OldChrom
             else:
                 chrom = OldChrom
                 print(chrom.shape)
                 num, len = chrom.shape
                 for i in range(num // 2):
-                    chrom[i], chrom[i + num // 2] = self.two_points_cross(chrom[i], chrom[i + num // 2],XOVR)
+                    chrom[i], chrom[i + num // 2] = self.two_points_cross(chrom[i], chrom[i + num // 2], XOVR)
                 return OldChrom
         elif Half_N is True:
             if (type(OldChrom) is list):
@@ -269,14 +437,14 @@ class Xovud(Recombination):
                 for chrom in OldChrom:
                     num, len = chrom.shape
                     for i in range(num // 2):
-                        chrom[i], _ = self.two_points_cross(chrom[i], chrom[i + num // 2],XOVR)
+                        chrom[i], _ = self.two_points_cross(chrom[i], chrom[i + num // 2], XOVR)
                     newchrom.append(chrom[:(num // 2)])
                 return newchrom
             else:
                 chrom = OldChrom
                 num, len = chrom.shape
                 for i in range(num // 2):
-                    chrom[i], _ = self.two_points_cross(chrom[i], chrom[i + num // 2],XOVR)
+                    chrom[i], _ = self.two_points_cross(chrom[i], chrom[i + num // 2], XOVR)
                 return OldChrom[:(num // 2)]
         else:
             if (type(OldChrom) is list):
@@ -290,7 +458,7 @@ class Xovud(Recombination):
                         while point1 != point2:
                             point1 = random.randint(0, num - 1)
                             point2 = random.randint(0, num - 1)
-                        nextchrom, _ = self.two_points_cross(chrom[point1], chrom[point2],XOVR)
+                        nextchrom, _ = self.two_points_cross(chrom[point1], chrom[point2], XOVR)
                         newchroms.append(nextchrom)
                     newchroms = np.array(newchroms)
                     returnchroms.append(newchroms)
@@ -305,24 +473,25 @@ class Xovud(Recombination):
                     while point1 != point2:
                         point1 = random.randint(0, num - 1)
                         point2 = random.randint(0, num - 1)
-                    nextchrom, _ = self.two_points_cross(chrom[point1], chrom[point2],XOVR)
+                    nextchrom, _ = self.two_points_cross(chrom[point1], chrom[point2], XOVR)
                     newchroms.append(nextchrom)
                 newchroms = np.array(newchroms)
                 return newchroms
 
-    def two_points_cross(self, a1, a2,XOVR=0.5):
+    def two_points_cross(self, a1, a2, XOVR=0.5):
         # print(a1.shape[0])
         for i in range(a1.shape[0]):
             prob = random.random()
             # print(prob,i,XOVR)
             if prob <= XOVR:
-                tmp=(a2[i])
-                a2[i]=a1[i]
-                a1[i]=tmp
-        return a1,a2
+                tmp = (a2[i])
+                a2[i] = a1[i]
+                a1[i] = tmp
+        return a1, a2
 
     def getHelp(self):  # 查看内核中的重组算子的API文档
         help(xovdp)
+
 
 class Xovpmx(Recombination):
     """
@@ -495,7 +664,6 @@ class Recsbx(Recombination):
                 num, len = chrom.shape
                 for i in range(num // 2):
                     prob = random.random()
-                    # print(prob)
                     if (prob <= XOVR):
                         chrom[i], chrom[i + num // 2] = self.sbx(chrom[i], chrom[i + num // 2])
                 return OldChrom
@@ -549,12 +717,11 @@ class Recsbx(Recombination):
                     newchroms.append(nextchrom)
                 newchroms = np.array(newchroms)
                 return newchroms
-        pass
 
     def sbx(self, chroma, chromb, n=20):
         # print(chroma.shape)
-        if len(chroma.shape)>1:
-            chroma=chroma.reshape(-1)
+        if len(chroma.shape) > 1:
+            chroma = chroma.reshape(-1)
             chromb = chromb.reshape(-1)
         lens = chroma.shape[0]
         for k in range(lens):
@@ -562,11 +729,11 @@ class Recsbx(Recombination):
             if (r <= 0.5):
                 beta = np.power(2 * r, 1 / (n + 1))
             else:
-                beta = np.power(1/(2-2*r),-1 / (n + 1))
+                beta = np.power(1 / (2 - 2 * r), 1 / (n + 1))
             chroma[k] = 0.5 * ((1 + beta) * chroma[k] + (1 - beta) * chromb[k])
             chromb[k] = 0.5 * ((1 - beta) * chroma[k] + (1 + beta) * chromb[k])
 
-        return   chroma,chromb
+        return chroma, chromb
 
     def getHelp(self):  # 查看内核中的重组算子的API文档
         help(geatpy.recsbx)
@@ -582,11 +749,16 @@ if __name__ == '__main__':
     b = np.zeros((1, 10))
     print(type(a) is list, type(b) is np.ndarray, b.shape[1])
     dim = 2
-    Encoding = "P"
-    problem_varTypes = np.zeros(dim)
-    problem_ranges = np.ones((2, dim))
+    Encoding = "BG"
+    problem_varTypes = np.array([0, 0])
+    problem_ranges = np.array([[0, 0], [3, 3]])
     problem_borders = np.zeros((2, dim))
-    crtfld(Encoding, problem_varTypes, problem_ranges, problem_borders)
+    print(crtfld(Encoding, problem_varTypes, problem_ranges, problem_borders))
+    print((Encoding, problem_varTypes, problem_ranges, problem_borders))
+    problem_varTypes = np.array([0, 0])
+    problem_ranges = np.array([[0, 0], [3, 3]])
+    problem_borders = np.zeros((2, dim))
+    print(geatpy.crtfld(Encoding, problem_varTypes, problem_ranges, problem_borders))
     half = 10
     if half is True:
         print(1)
@@ -625,23 +797,35 @@ if __name__ == '__main__':
     # print(zeros)
     test = Recsbx()
     one = np.random.random((2, 4))
-    print(chrom<5)
-    print("zuixiao",sum(np.reshape(chrom<5,(-1))))
-    one1 =copy.deepcopy(one)
+    print(chrom < 5)
+    print("zuixiao", sum(np.reshape(chrom < 5, (-1))))
+    one1 = copy.deepcopy(one)
     # print(one,"\n")
-    newtone=test.myrecsbx(one,XOVR=1)
+    newtone = test.myrecsbx(one, XOVR=1)
+    print(newtone)
     # chrom = np.random.random((4, 4))
-    origin=geatpy.Recsbx(Half_N = False,XOVR=0.5)
+    origin = geatpy.Recsbx(Half_N=False, XOVR=0.5)
+    print(origin.do(one1))
     test = Xovud()
     one = np.ones((5, 5))
     zero = np.zeros((5, 5))
 
-    chrom=np.vstack((one,zero))#垂直拼接
+    chrom = np.vstack((one, zero))  # 垂直拼接
     print(chrom)
-    newchrom=test.myxovud(chrom,XOVR=0.5)
-    test2=geatpy.Xovud(XOVR=1)
-    print(newchrom,"\n",test2.do(np.vstack((one,zero))))
-    # print(origin.do(one1))
+    newchrom = test.myxovud(chrom, XOVR=0.5)
+    test2 = geatpy.Xovud(XOVR=1)
+    print(newchrom, "\n", test2.do(np.vstack((one, zero))))
+
+    chrom = np.vstack((one, zero))  # 垂直拼接
+    test = Mutpolyn()
+    print(chrom)
+    chrom = np.array(5).reshape((-1, 1))
+    chrom = chrom.astype(np.float64)
+    felids = np.array([0, 10, 0]).reshape((-1, 1))
+    newchrom = test.mymutpolyn(Encoding="RI", OldChrom=chrom, FieldDR=felids)
+    print("1", newchrom)
+    test2 = geatpy.Mutpolyn()
+    print(newchrom, "\n", test2.do(Encoding="RI", OldChrom=chrom, FieldDR=felids))
     # name = 'MyProblem'  # 初始化name（函数名称，可以随意设置）
     # M = 1  # 初始化M（目标维数）
     # maxormins = [-1]  # 初始化maxormins（目标最小最大化标记列表，1：最小化该目标；-1：最大化该目标）
@@ -656,4 +840,5 @@ if __name__ == '__main__':
     # Field = crtfld(Encoding, np.array(varTypes),np.stack([lb, ub], axis=0) , np.stack([lbin, ubin], axis=0))
     # print(Field)
     # print(geatpy.bs2real(one,Field))
-    # help(geatpy.xovud)
+    # help(geatpy.mutpolyn)
+    # help(geatpy.crtfld)
