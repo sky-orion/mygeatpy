@@ -26,12 +26,28 @@ def get_igd(pf, points):
     for p in pf:
         igd_min = float('inf')
         for pi in points:
-            d = sum(list((np.array(p) - np.array(pi)) ** 2))
+            d = np.linalg.norm(pi - p)
             if d < igd_min:
                 igd_min = d
         igd_sum += igd_min
     return float(igd_sum) / len(pf)
 
+def get_gd(points, pf):
+    '''
+    计算GD
+    :param pf: 真实前沿点
+    :param points: 计算所得前沿点
+    :return:
+    '''
+    igd_sum = 0.0
+    for p in pf:
+        igd_min = float('inf')
+        for pi in points:
+            d = np.linalg.norm(pi - p)
+            if d < igd_min:
+                igd_min = d
+        igd_sum += igd_min
+    return float(igd_sum) / len(pf)
 
 def get_spacing(points):
     di = []
@@ -55,7 +71,13 @@ if __name__ == '__main__':
     solutions = np.array([[1, 4], [2, 2], [1, 3], [4, 1]])
     volume = get_hyperVolume(solutions)
     igds = get_igd(referencePoint, solutions)
-    print(volume, igds)
+    from pymoo.factory import get_performance_indicator
+    hv = get_performance_indicator("gd", pf=referencePoint)
+    print("gd", hv.do(solutions))
+    hv = get_performance_indicator("igd", pf=referencePoint)
+    print("igd", hv.do(solutions))
+    print("gd复现", get_gd(referencePoint, solutions))
+    print("igd复现", igds)
     print(get_spacing(solutions))
     p = r'C:\Users\13927\Desktop\毕设\moea_demo\moea_demo5\Result\Objv.csv'
     with open(p, encoding='utf-8') as f:
