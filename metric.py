@@ -33,6 +33,22 @@ def get_igd(pf, points):
     return float(igd_sum) / len(pf)
 
 
+def get_spacing(points):
+    di = []
+    lenp = points.shape[0]
+    for i in range(lenp):
+        spacing_min = float('inf')
+        for j in range(lenp):
+            if i == j:
+                continue
+            d = np.linalg.norm(points[i] - points[j])
+            if d < spacing_min:
+                spacing_min = d
+        di.append(spacing_min)
+    di = np.array(di)
+    return np.sqrt(1 / (lenp - 1)) * np.linalg.norm(di - np.mean(di))
+
+
 if __name__ == '__main__':
     # Example:
     referencePoint = np.array([5, 5])
@@ -40,3 +56,10 @@ if __name__ == '__main__':
     volume = get_hyperVolume(solutions)
     igds = get_igd(referencePoint, solutions)
     print(volume, igds)
+    print(get_spacing(solutions))
+    p = r'C:\Users\13927\Desktop\毕设\moea_demo\moea_demo5\Result\Objv.csv'
+    with open(p, encoding='utf-8') as f:
+        data = np.loadtxt(f, delimiter=",")
+        print(get_spacing(data))
+
+
