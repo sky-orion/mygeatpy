@@ -26,7 +26,6 @@ class moea_SPEA2_templet(ea.MoeaAlgorithm):
             self.mutOper = ea.Mutpolyn(Pm=1 / self.problem.Dim, DisI=20)  # 生成多项式变异算子对象
         else:
             raise RuntimeError('编码方式必须为''BG''、''RI''或''P''.')
-        self.N_ = None
         self.archive = None
         self.selFunc = 'tour'  # 选择方式，采用锦标赛选择
 
@@ -55,9 +54,8 @@ class moea_SPEA2_templet(ea.MoeaAlgorithm):
         F = totalpopulation.FitnV
         indices_next_archive = np.where(F < 1)[0]
         length = len(indices_next_archive)
-        # print(F,length,N_archive,F.shape,np.argsort(F.reshape(-1)))
         if length < N_archive:
-            best_inidices = np.argsort(F.reshape(-1),kind="mergesort")
+            best_inidices = np.argsort(F.reshape(-1), kind="mergesort")
             indices_next_archive = best_inidices[:N_archive]
         elif length > N_archive:
             rest = length - N_archive
@@ -65,8 +63,8 @@ class moea_SPEA2_templet(ea.MoeaAlgorithm):
                                                                               [indices_next_archive], :]) ** 2
             dist = np.sqrt(np.sum(np.squeeze(dist), axis=2))
             ind = np.triu_indices(dist.shape[0])
-            dist[ind] = 1000000
-            y, _ = np.unravel_index(np.argsort(dist.ravel(),kind="mergesort"), dist.shape)
+            dist[ind] = np.inf
+            y, _ = np.unravel_index(np.argsort(dist.ravel(), kind="mergesort"), dist.shape)
             _, i = np.unique(y, return_index=True)
             indices_to_delete = y[sorted(i)][:rest]
             indices_next_archive = np.delete(indices_next_archive, indices_to_delete)
@@ -86,6 +84,7 @@ class moea_SPEA2_templet(ea.MoeaAlgorithm):
         NIND = self.population.sizes
         N_archive = NIND
         K = int(np.sqrt(NIND + N_archive))  # 邻居数
+        maxindice = np.where(self.problem.maxormins == -1)  # 为最大化函数的位置
         self.initialization()  # 初始化算法模板的一些动态参数
         # ===========================准备进化============================
         population.initChrom(NIND)  # 初始化种群染色体矩阵，此时种群规模将调整为uniformPoint点集的大小，initChrom函数会把种群规模给重置
@@ -93,15 +92,10 @@ class moea_SPEA2_templet(ea.MoeaAlgorithm):
         # 插入先验知识（注意：这里不会对先知种群prophetPop的合法性进行检查，故应确保prophetPop是一个种群类且拥有合法的Chrom、ObjV、Phen等属性）
         if prophetPop is not None:
             population = (prophetPop + population)[:NIND]  # 插入先知种群
-        for i in range(self.problem.maxormins.shape[0]):
-            if self.problem.maxormins[i] == -1:
-                population.ObjV[:, i] = -population.ObjV[:, i]
+        population.ObjV[:, maxindice] = -population.ObjV[:, maxindice]
+        totalpopulation = population
         # ===========================开始进化============================
         while True:
-            if self.archive is None:
-                totalpopulation = population
-            else:
-                totalpopulation = population + self.archive
             totalpopulation.FitnV = self.Fitnessassignment(totalpopulation, K)
             self.archive = self.EnvironmentalSelection(totalpopulation, N_archive)
             offspring = self.archive[ea.selecting(self.selFunc, self.archive.FitnV, NIND)]
@@ -111,12 +105,11 @@ class moea_SPEA2_templet(ea.MoeaAlgorithm):
             population = offspring
             self.call_aimFunc(population)  # 计算种群的目标函数值
             self.call_aimFunc(self.archive)  # 计算种群的目标函数值
-            for i in range(self.problem.maxormins.shape[0]):
-                if self.problem.maxormins[i] == -1:
-                    population.ObjV[:, i] = -population.ObjV[:, i]
-                    self.archive.ObjV[:, i] = -self.archive.ObjV[:, i]
+            population.ObjV[:, maxindice] = -population.ObjV[:, maxindice]
+            self.archive.ObjV[:, maxindice] = -self.archive.ObjV[:, maxindice]
             if self.terminated(self.archive) == True:
                 break
+            totalpopulation = population + self.archive
 
         return self.finishing(self.archive)  # 调用finishing完成后续工作并返回结果
 
