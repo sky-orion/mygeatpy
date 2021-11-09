@@ -103,13 +103,16 @@ class moea_SPEA2_templet(ea.MoeaAlgorithm):
             offspring.Chrom = self.recOper.do(offspring.Chrom)  # 重组
             offspring.Chrom = self.mutOper.do(offspring.Encoding, offspring.Chrom, offspring.Field)  # 变异
             population = offspring
-            self.call_aimFunc(population)  # 计算种群的目标函数值
-            self.call_aimFunc(self.archive)  # 计算种群的目标函数值
-            population.ObjV[:, maxindice] = -population.ObjV[:, maxindice]
-            self.archive.ObjV[:, maxindice] = -self.archive.ObjV[:, maxindice]
-            if self.terminated(self.archive) == True:
-                break
             totalpopulation = population + self.archive
+            self.call_aimFunc(totalpopulation)
+            totalpopulation.ObjV[:, maxindice] = -totalpopulation.ObjV[:, maxindice]
+            # self.call_aimFunc(population)  # 计算种群的目标函数值
+            # self.call_aimFunc(self.archive)  # 计算种群的目标函数值
+            # population.ObjV[:, maxindice] = -population.ObjV[:, maxindice]
+            # self.archive.ObjV[:, maxindice] = -self.archive.ObjV[:, maxindice]
+            # totalpopulation = population + self.archive
+            if self.terminated(self.archive):
+                break
 
         return self.finishing(self.archive)  # 调用finishing完成后续工作并返回结果
 
